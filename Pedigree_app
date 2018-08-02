@@ -1,105 +1,277 @@
+#The user should install the following packages before running the app
+#install.packages("readxl")
+#install.packages("kinship2)
+#install.packages("tools")
+#install.packages("shinythemes")
+#install.packages("quadprog")
+#install.packages("Matrix")
+#install.packages("shinycssloaders")
+
 library(shiny)
-library(Seurat)
-library(dplyr)
+library(readxl)
+library(kinship2)
 library(Matrix)
+library(quadprog)
+library(tools)
+library(shinythemes)
+library(shinyjs)
+library(shinycssloaders)
 
 
-ui <- fluidPage(
-  titlePanel("Seurat Gallery"),
-  fluidRow(
-    column(3, 
-           wellPanel(
-             fileInput(inputId="file_name", label="Select Saved Seurat Object File"),
-             radioButtons(inputId = "labelBoolean", label="Display labels?", choices = c("TRUE","FALSE"), selected="TRUE"),
-             radioButtons(inputId = "legendBoolean", label="Hide legend?", choices = c("TRUE","FALSE"), selected="FALSE"),
-             tags$hr(),
-             sliderInput(inputId = "dotSize", label = "Set point size", value=1, min=0.01, max=10),
-             sliderInput(inputId = "labelSize", label = "Set label size", value=4, min=0.5, max=10)
-           ),
-           wellPanel(
-             textInput(inputId = "geneName", label="Enter Gene Name", value="Actb"),
-             actionButton("goButton", "Plot Gene")
-           )
-    ),
-    column(9,
-           verbatimTextOutput("console1"),
-           plotOutput("TSNE"),
-           tags$hr(),
-           tabsetPanel(
-             tabPanel("TSNE", plotOutput("featureTSNE")),
-             tabPanel("Violins", plotOutput("vlnPlot"))
-           )
+#Set maximum upload size to 1000 mb
+options(shiny.maxRequestSize = 1000*1024^2)
+
+#chaining conditions together with the %then% operator, to display one validation error message at a time.  
+`%then%` <- shiny:::`%OR%`
+
+#Function 'Check' to check for errors in the excel file and validate for them, in order not to cause any failure in ploting the pedigree
+#Error might be caused for missing IDs & variables / Duplicated IDs
+Check <- function(inputFile, id, dadid, momid, sex, affected){
+  for(i in  1:nrow(inputFile)){
+    shiny::validate(
+      need((id[i]!= "NA"), label = "Missing value for the  'ID' variable! Please check your input excel file. All variables")%then%
+      need(!any((duplicated(id))), label = "Duplicated ID exists! Please check your input excel file. Unique ID variables")%then%
+      need((dadid[i]!= "NA"), label = "Missing value for the 'father' ID variable Please check your input excel file. All variables")%then%
+      need((momid[i] != "NA"), label= "Missing value for the 'mother' ID variable! Please check your input excel file. All variables")%then%
+      need((sex[i] != "NA"), label = "Missing value for the 'sex' variable! Please check your input excel file. All variables")%then%
+      need((affected[i] != "NA"), label = "Missing value for the 'affected' variable! Please check your input excel file. All variables"),
+      errorClass = "MyClass"
     )
-  )
-)
-
-
-server <- function(input, output) {
-  
-  # increase the max upload file size
-  options(shiny.maxRequestSize=1000*1024^2)
-  
-  # set demo dataset file here
-  demo = "pancreas.Rda"
-  
-  SeuratObject <- reactive({
-    if(is.null(input$file_name)){
-      # Load a default demo dataset
-      load(file=demo)
-    } else {
-      # Load user-defined dataset
-      load(input$file_name$datapath)
-    }
-  })
-  
-  output$contents <- renderText({
-    if (!is.null(input$file_name)){
-      "Currently displaying 8.5k Pancreas dataset as demo"
-    } else {
-      load(file=inFile$name)
-    }
-  })
-  
-  output$console1 <- renderPrint({
-    if (is.null(input$file_name)){
-      get(load(demo))
-    } else {
-      # should be a more elegant way of doing this, but this works...
-      get(load(input$file_name$name))
-    }
-  })
-  
-  # Display TSNE Plot as overview toggled options for display legends/labels and setting size. Default displays demo dataset
-  output$TSNE <- renderPlot({
-    if (is.null(input$file_name)){
-      load(file=demo)
-    } else {
-      load(input$file_name$datapath)
-    }
-    TSNEPlot(get(SeuratObject()), do.label = input$labelBoolean, pt.size = input$dotSize, label.size = input$labelSize, no.legend=input$legendBoolean)
-  })
-  
-  fPlot <- eventReactive(input$goButton, {
-    if (is.null(input$file_name)){ 
-      load(file=demo)
-    } else {
-      load(input$file_name$datapath)
-    }
-    FeaturePlot(get(SeuratObject()), input$geneName,pt.size = input$dotSize)
-  })
-  
-  vPlot <- eventReactive(input$goButton, {
-    if (is.null(input$file_name)){ 
-      load(file=demo)
-    } else {
-      load(input$file_name$datapath)
-    }
-    VlnPlot(get(SeuratObject()), features.plot = input$geneName, size.x.use = NULLbo)
-  })
-  
-  output$featureTSNE <- renderPlot(fPlot())
-  output$vlnPlot <- renderPlot(vPlot())
+  }
   
 }
 
+
+
+appCSS <- "
+#loading-content {
+position: absolute;
+background: #FFFFFF;
+z-index: 100;
+left: 0;
+right: 0;
+height: 100%;
+text-align: center;
+color: #000000;
+}
+"
+
+ui <-
+  fluidPage( title = "Pedigree Chart App", style = "margin:50px;",
+             
+             useShinyjs(),
+             inlineCSS(appCSS),
+             # Loading message
+             div(
+               id = "loading-content",
+               h2("Loading...")
+             ),
+             
+             #shinythemes::themeSelector(),
+             theme = shinytheme("readable"),
+             fluidRow(
+                column(width = 10,
+                       img( src = "pedigree3.jpg", style = "height:150px; float:left;"),
+                       tags$br(),
+                       tags$br(),
+                       tags$h1(("GENEALOTREE"), style = "color:blue; font-family:TimesNewRoman; font-weight:bold; font-size:110px;"),
+                       tags$hr()
+
+                ),
+                column(width = 2,
+                       actionButton(inputId = "reloadApp",label = "Reload App", class="btn-danger", style = "float:right")
+                       )
+             ),
+             tags$br(),
+             tags$br(),
+             tabsetPanel( id = "TheMainTabs",
+                          tabPanel( title ="Upload File",
+                                    fluidRow(
+                                      column(width = 4,
+                                             wellPanel(id="UploadFile",
+                                                       fileInput(inputId = "Selectedfile",
+                                                                 label = "Select Your File:    (You have to upload an excel File)",
+                                                                 multiple = FALSE,
+                                                                 accept=c('application/vnd.ms-excel',
+                                                                          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                                                          '.xls',
+                                                                          '.xlsx')),
+                                                       actionButton(inputId = "SubmitButtonToPlot",label = "Plot")
+                                                    
+                                             )
+                                             
+                                      ),
+                                      column(width=4,
+                                            tableOutput("contents")
+                                            )
+                                    )
+                              ),
+                          
+                       #   tabPanel(title = "Color",
+                            #      fluidRow(
+                                 #   column(width = 4,
+                                  #         wellPanel(id = "ChoosingColor",
+                                      #               selectizeInput(inputId = "SelectedColors",
+                                    #                               label = "Choose colors to color your pedigree",
+                                     #                               choices = c("red", "orange", "yellow", "green", "blue", "purple", "black"),
+                                      #                              selected = NULL,
+                                       #                             multiple = TRUE
+                                       #              )
+                                                    # actionButton(inputId = "SubmitButtonToPlot",label = "Plot")
+                                             
+                                         #  )
+                                        #   )
+                                 # )
+                                 #  ),
+                          tabPanel(title = "Plot",
+                                   fluidRow(
+                                     column(width=2,
+                                            wellPanel(id="PlotButtonPress",
+                                                      #actionButton(inputId = "PlotButton", label = "Plot"),
+                                                      downloadButton(outputId = "downloadPedigree", label = "Download Plot")
+                                                      )
+                                            ),
+                                     column(width=10,
+                                            wellPanel(id="PlotPedigreeOutput",
+                                                      withSpinner(plotOutput("pedigreePlot", height = 700))
+                                            )
+                                            )
+                                   )
+                            
+                          )
+                            
+                          ),
+             #to style an individual validate message; Shiny will assign the message a class that begins with "shiny-output-error-" and ends with the character string that you pass errorClass. 
+             tags$head(
+               tags$style(HTML("
+                               .shiny-output-error-validation {
+                               color: green;
+                               font-size:15px;
+                               }
+                               "))
+               )
+             
+             )
+
+      
+
+server <- function(input, output, session){
+  
+  #UI for loading
+  # Simulate work being done for 1 second
+  Sys.sleep(1.5)
+  # Hide the loading message when the rest of the server function has executed
+  hide(id = "loading-content", anim = TRUE, animType = "fade") 
+  
+  #Validating for errors that might cause pedigree ploting to fail
+  #To give an error for missing IDs using validate in R/ Duplicated IDs
+  Errordata <- reactive({
+    
+    req(input$Selectedfile)
+    
+    #Error to be shown to user in case other than excel file types was uploaded
+    ext<-c('application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    excel_required <-is.element(input$Selectedfile$type,ext)
+    shiny::validate(
+      need(excel_required, label = "Input Excel File")
+    )
+    
+    pedigreefile <- read_excel(path =input$Selectedfile$datapath, sheet = 1, col_names = TRUE)
+    attach(pedigreefile)
+    Check(pedigreefile, ID, father, mother, sex, affected)    #The user has to put the variable names according to the column names in his/her the excel file: such as mother/father/....
+  })
+  
+  
+  # Reload App
+  observeEvent(input$reloadApp, {
+    session$reload()
+  })
+  
+  #By clicking 'Submit' button, the user accesses the Color Tab
+ observeEvent(input$SubmitButtonToColor, {
+   if(!is.null(input$Selectedfile)){
+   updateTabsetPanel(session = session, inputId = "TheMainTabs", selected = "Color") 
+   }
+   else
+   {
+     showNotification(ui="Please upload your file", duration = 5, closeButton = TRUE, type = "message")
+   }
+ })
+  #By clicking the 'Submit' button, the user accesses the plot Tab
+  #observeEvent(input$SubmitButtonToPlot, {
+    #if(!is.null(input$SelectedColors)){
+    #  updateTabsetPanel(session = session, inputId = "TheMainTabs", selected = "Plot") 
+   # }
+  #  else
+    #{
+   #   showNotification(ui="Please choose colors to plot the pedigree", duration = 5, closeButton = TRUE, type = "message")
+  #  }
+ # })
+ 
+  #display the contents of the uploaded excel file
+  output$contents <- renderTable(
+     
+    
+    if(is.null(input$Selectedfile)){
+      return((NULL))
+    }else{
+      
+      Errordata()
+    read_excel(path =input$Selectedfile$datapath, sheet = 1, col_names = TRUE)
+      
+    
+    }
+    
+  )
+  
+  plotInput <- reactive({ 
+   req(input$Selectedfile)
+   data()
+   pedigreefile <- input$Selectedfile
+   attach(pedigreefile)
+   #The user has to put the variable names according to the column names in his/her the excel file: such as mother/father/....
+   ped <- pedigree( id = ID,dadid = father,momid = mother,sex = sex,affected = affected)
+   rgb.palette <- colorRampPalette(c("red", "orange", "yellow", "green", "blue", "purple", "black"), space = "rgb")
+   palette(rgb.palette(100))
+   z = rorg * 100
+   plot.pedigree(x = ped,col = z,cex=.7, id=z)
+  
+   })
+  
+  #Press Plot button to get the pedigree Plot colored 
+  observeEvent(input$SubmitButtonToPlot, { 
+    #req(input$SelectedColors)
+    updateTabsetPanel(session = session, inputId = "TheMainTabs", selected = "Plot")
+    withProgress(message = 'Making Pedigree plot', value = 0, {
+    output$pedigreePlot <- renderPlot({
+    req(input$Selectedfile)
+    data()
+    pedigreefile <- input$Selectedfile
+    attach(pedigreefile)
+    #The user has to put the variable names according to the column names in his/her the excel file: such as mother/father/....
+    ped <- pedigree( id = ID,dadid = father,momid = mother,sex = sex,affected = affected)
+    rgb.palette <- colorRampPalette(c("red", "orange", "yellow", "green", "blue", "purple", "black"), space = "rgb")
+    palette(rgb.palette(100))
+    z = rorg * 100
+    #z <- Categorize(rorg)
+    plot.pedigree(x = ped,col = z,cex=.7, id=z)
+    
+    
+       })
+    })
+  })
+
+  #Downlonad the pedigree plot
+  output$downloadPedigree <- downloadHandler(
+    filename = function(){
+      paste('PedigreePlot', '.png', sep = ' ')
+    },
+    content = function(file){
+      png(file, width = 1500, height = 800)
+      print(plotInput())
+      dev.off()
+    }
+  )
+  
+}
 shinyApp(ui = ui, server = server)
