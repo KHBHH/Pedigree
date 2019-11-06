@@ -32,6 +32,7 @@ library(quadprog)
 library(igraph)
 library(FamAgg)
 library(tools)
+library(DT)
 
 
 #Set maximum upload size to 1000 mb
@@ -65,7 +66,7 @@ ui <-
              
              #Include Styling for the app
              #  includeCSS(path = "www/css/style.css"),
-
+             
              #shinythemes::themeSelector(),
              #theme = shinytheme("readable"),
              fluidRow(
@@ -75,7 +76,7 @@ ui <-
                       #tags$h4("Shiny app to visualize family tree")
                       img( src = "text1.png"),
                       tags$br()
-                  
+                      
                ),
                column(width = 2,
                       actionButton(inputId = "reloadApp",label = "Reload App", class="btn-danger")
@@ -85,80 +86,88 @@ ui <-
              tags$br(),
              sidebarLayout(
                sidebarPanel(   width = 3,
-                           fileInput(inputId = "Selectedfile",
-                                     label = "Upload an excel file",
-                                     multiple = FALSE,
-                                     accept=c('application/vnd.ms-excel',
-                                              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                              '.xls',
-                                              '.xlsx')),
-                           actionButton(inputId = "SubmitButtonToColor",label = "Display"),
-                # ),
-                           hr(),
-                          # wellPanel(
-                           selectizeInput(inputId = "SelectedColumn",
-                                          label = "Choose the dependent column to color the plot",
-                                          choices = NULL,
-                                          selected = NULL
-                           ),
-                           selectizeInput(inputId = "SelectedColumnType",
-                                          label = "Type of column selected",
-                                          choices = c("character", "numeric"),
-                                          selected = NULL
-                           ),
-                           hr(),
-                           selectizeInput(inputId = "NumClass", label = "Number of classes", choices = 1:6),
-                           selectizeInput(inputId = "SelectedColors",
-                                          label = "Choose a range of colors to color the tree",
-                                          choices = c("blue", "green", "yellow", "orange", "red", "brown4"),
-                                          options = list(maxItems = 5),
-                                          selected = NULL,
-                                          multiple = TRUE
-                           ),
-                           #sliderInput(inputId = "RangeColors", label = "Color Palletes", min = "Red", max = "blue", value = 1),
-                           selectizeInput(inputId = "ShowByID",
-                                          label = "Visualize the pedigree By",
-                                          choices = c("ID", "values", "both"),
-                                          selected = NULL,
-                                          multiple = FALSE
-                           ),
-                           actionButton(inputId = "SubmitButtonToPlot",label = "Plot pedigree")
-                          # )
-                          # tags$hr(),
-                          # wellPanel(
-                          # selectizeInput(inputId = "SelectID", label = "Select IDs for subpedigree Plot", choices = NULL, multiple = TRUE),
-                           #actionButton(inputId = "bttnSubpedigree", label = "Plot subpedigree")
-                           #)
+                               fileInput(inputId = "Selectedfile",
+                                         label = "Upload an excel file",
+                                         multiple = FALSE,
+                                         accept=c('application/vnd.ms-excel',
+                                                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                                  '.xls',
+                                                  '.xlsx')),
+                               actionButton(inputId = "SubmitButtonToColor",label = "Display"),
+                               actionButton(inputId = "SubmitButtonToSubset",label = "Display Subset"),
+                               # ),
+                               hr(),
+                               # wellPanel(
+                               selectizeInput(inputId = "SelectedColumn",
+                                              label = "Choose the dependent column to color the plot",
+                                              choices = NULL,
+                                              selected = NULL
+                               ),
+                               selectizeInput(inputId = "SelectedColumnType",
+                                              label = "Type of column selected",
+                                              choices = c("character", "numeric"),
+                                              selected = NULL
+                               ),
+                               hr(),
+                               selectizeInput(inputId = "NumClass", label = "Number of classes", choices = 1:6),
+                               selectizeInput(inputId = "SelectedColors",
+                                              label = "Choose a range of colors to color the tree",
+                                              choices = c("blue", "green", "yellow", "orange", "red", "brown4"),
+                                              options = list(maxItems = 5),
+                                              selected = NULL,
+                                              multiple = TRUE
+                               ),
+                               #sliderInput(inputId = "RangeColors", label = "Color Palletes", min = "Red", max = "blue", value = 1),
+                               selectizeInput(inputId = "ShowByID",
+                                              label = "Visualize the pedigree By",
+                                              choices = c("ID", "values", "both"),
+                                              selected = NULL,
+                                              multiple = FALSE
+                               ),
+                               sliderInput("scaleNodes", "Scaling the size of the nodes:",
+                                           min = 0.5, max = 5, value = 1, step = 0.2
+                               ),
+                               sliderInput("scaleText", "Scaling the size of the text:",
+                                           min = 0.5, max = 10, value = 1, step = 0.2
+                               ),
+                               actionButton(inputId = "SubmitButtonToPlot",label = "Plot pedigree")
+                               # )
+                               # tags$hr(),
+                               # wellPanel(
+                               # selectizeInput(inputId = "SelectID", label = "Select IDs for subpedigree Plot", choices = NULL, multiple = TRUE),
+                               #actionButton(inputId = "bttnSubpedigree", label = "Plot subpedigree")
+                               #)
                ),
-             mainPanel(
-             tabsetPanel( id = "TheMainTabs", type = "pills",
-                          tabPanel( title ="Upload File",
-                                    dataTableOutput(outputId = "contents")
-                          ),
-                          tabPanel(title = "Plot",
-                                            wellPanel(id="PlotPedigreeOutput",
-                                                      tabsetPanel(id = "PlotwellPanel",
-                                                                  tabPanel(title = "Pedigree", 
-                                                                           plotOutput("pedigreePlot", height = "700px"), 
-                                                                           tags$br(),
-                                                                           downloadButton(outputId = "downloadPedigree_png", label = "Download as PNG"),
-                                                                           downloadButton(outputId = "downloadPedigree_svg", label = "Download as SVG"),
-                                                                           downloadButton(outputId = "downloadPedigree_pdf", label = "Download as PDF")
-                                                                  )
-                                                                #  tabPanel(title = "Subpedigree",
-                                                                          # plotOutput("subpedigreePlot", height = "700px")
-                                                                           #)
-                                                      )
-                                            )
-                                   
-                          ),
-                          tabPanel(title = "Help"),
-                          tabPanel(title = "About the title", 
-                                   htmlOutput(outputId = "InfoData")
-                                   )
-                          
-             )
-             )
+               mainPanel(
+                 tabsetPanel( id = "TheMainTabs", type = "pills",
+                              tabPanel( title ="Upload File",
+                                        DT::dataTableOutput(outputId = "contents"),
+                                        DT::dataTableOutput(outputId = "subset")
+                              ),
+                              tabPanel(title = "Plot",
+                                       wellPanel(id="PlotPedigreeOutput",
+                                                 tabsetPanel(id = "PlotwellPanel",
+                                                             tabPanel(title = "Pedigree", 
+                                                                      plotOutput("pedigreePlot", height = "700px"), 
+                                                                      tags$br(),
+                                                                      downloadButton(outputId = "downloadPedigree_png", label = "Download as PNG"),
+                                                                      downloadButton(outputId = "downloadPedigree_svg", label = "Download as SVG"),
+                                                                      downloadButton(outputId = "downloadPedigree_pdf", label = "Download as PDF")
+                                                             )
+                                                             #  tabPanel(title = "Subpedigree",
+                                                             # plotOutput("subpedigreePlot", height = "700px")
+                                                             #)
+                                                 )
+                                       )
+                                       
+                              ),
+                              tabPanel(title = "Help"),
+                              tabPanel(title = "About the title", 
+                                       htmlOutput(outputId = "InfoData")
+                              )
+                              
+                 )
+               )
              )
   )
 
@@ -192,7 +201,7 @@ server <- function(input, output, session){
     attach(pedigreefile)
     NamesOfColumns <- colnames(pedigreefile)
     updateSelectizeInput(session = session, inputId = "SelectedColumn", choices = NamesOfColumns, selected = NamesOfColumns[7])
-   # updateSelectizeInput(session = session, inputId = "SelectID", choices = pedigreefile$ID, selected = NamesOfColumns[7])
+    # updateSelectizeInput(session = session, inputId = "SelectID", choices = pedigreefile$ID, selected = NamesOfColumns[7])
   })
   
   
@@ -203,12 +212,28 @@ server <- function(input, output, session){
     }
     
     #display the contents of the uploaded excel file
-    output$contents <- renderDataTable(
+    output$contents <- DT::renderDataTable(
       #  Errordata()
       read_excel(path =input$Selectedfile$datapath, sheet = 1, col_names = TRUE, na = " ")
     )
+
+    observeEvent(input$SubmitButtonToSubset, {
+      origTable_selected <- reactive({
+        ids <- input$contents_rows_selected
+        read_excel(path =input$Selectedfile$datapath, sheet = 1, col_names = TRUE, na = " ")[ids,]
+      })
+      
+      output$subset <- DT::renderDataTable({
+        datatable(
+          origTable_selected(),
+          selection = list(mode = "multiple"),
+          caption = "Selected Rows from Original Data Table"
+        )
+      })
+    })
   })
-  
+
+  #input$tableId_rows_selected
   
   #### By clicking the 'Submit' button, the user accesses the plot Tab
   observeEvent(input$SubmitButtonToPlot, {
@@ -223,29 +248,29 @@ server <- function(input, output, session){
   
   #### Adjust the range of colors with respect to the selected column
   observeEvent(input$NumClass, {
-      updateSelectizeInput(session = session, inputId = "SelectedColors",
-                           options = list(maxItems = input$NumClass),
-                           selected = NULL
-      )
+    updateSelectizeInput(session = session, inputId = "SelectedColors",
+                         options = list(maxItems = input$NumClass),
+                         selected = NULL
+    )
   })
   
-#  observeEvent(input$bttnSubpedigree, {
- #   output$subpedigreePlot <- renderPlot({
- #     pedigreefile <- read_excel(path =input$Selectedfile$datapath, sheet = 1, col_names = TRUE, na =  " ")
- ##     attach(pedigreefile)
- #     f <- father[input$SelectID]
+  #  observeEvent(input$bttnSubpedigree, {
+  #   output$subpedigreePlot <- renderPlot({
+  #     pedigreefile <- read_excel(path =input$Selectedfile$datapath, sheet = 1, col_names = TRUE, na =  " ")
+  ##     attach(pedigreefile)
+  #     f <- father[input$SelectID]
   #    m <- mother[input$SelectID]
- #     s <- sex[input$SelectID]
- #     subped <- pedigree( id = input$SelectID ,dadid = f ,momid = m,sex = s)
+  #     s <- sex[input$SelectID]
+  #     subped <- pedigree( id = input$SelectID ,dadid = f ,momid = m,sex = s)
   #    tryCatch({
   #      plot.pedigree(x=subped)
   #    },
-   #     error=function(e){
-   #       stop(safeError("There are not enough connections to plot the subpedigree"))
-   #     }
+  #     error=function(e){
+  #       stop(safeError("There are not enough connections to plot the subpedigree"))
+  #     }
   #    )
   #  })
- #s })
+  #s })
   #### Press Plot button to get the pedigree Plot colored 
   observeEvent(input$SubmitButtonToPlot, { 
     
@@ -253,7 +278,9 @@ server <- function(input, output, session){
       
       #req(input$Selectedfile)
       #req(input$SelectedColors)
-      pedigreefile <- read_excel(path =input$Selectedfile$datapath, sheet = 1, col_names = TRUE, na =  " ")
+      ids <- input$contents_rows_selected
+      
+      pedigreefile <- read_excel(path =input$Selectedfile$datapath, sheet = 1, col_names = TRUE, na = " ")[ids,]
       # data()
       if ("IgA" %in% colnames(pedigreefile)){
         pedigreefile$IgA[is.na(pedigreefile$IgA)] <- 1
@@ -281,14 +308,14 @@ server <- function(input, output, session){
         ColStrain <- c(input$SelectedColors)[as.factor(get(input$SelectedColumn))]
         switch (input$ShowByID,
                 values = {
-                  plot.pedigree(x = ped, col = ColStrain, id = val, cex = .7)
+                  plot.pedigree(x = ped, col = ColStrain, id = val, cex = input$scaleText, symbolsize = input$scaleNodes)
                 },
                 ID = {
-                  plot.pedigree(x = ped, col = ColStrain, id = ID, cex = .7)
+                  plot.pedigree(x = ped, col = ColStrain, id = ID, cex = input$scaleText, symbolsize = input$scaleNodes)
                 }, 
                 both = {
                   valId = paste(ID, get(input$SelectedColumn), sep = "\n")
-                  plot.pedigree(x = ped, col = ColStrain, id = paste(ID, val), cex = .7)
+                  plot.pedigree(x = ped, col = ColStrain, id = paste(ID, val), cex = input$scaleText, symbolsize = input$scaleNodes)
                 }
         )
       }
@@ -301,14 +328,14 @@ server <- function(input, output, session){
         #align.pedigree(ped, packed=TRUE, width=10, align=TRUE, hints=ped$hints)
         switch (input$ShowByID,
                 values = {
-                  plot.pedigree(x = ped, col = z, id = val, cex = .7, pconnect = 0.1, branch = 1)
+                  plot.pedigree(x = ped, col = z, id = val, cex = input$scaleText, pconnect = 0.1, branch = 1,symbolsize = input$scaleNodes)
                 },
                 ID = {
-                  plot.pedigree(x = ped, col = z, id = ID, cex = .7, pconnect = 0.1, branch = 1)
+                  plot.pedigree(x = ped, col = z, id = ID, cex = input$scaleText, pconnect = 0.1, branch = 1, symbolsize = input$scaleNodes)
                 },
                 both = {
                   valId = paste(ID, get(input$SelectedColumn), sep = "\n")
-                  plot.pedigree(x = ped, col = z, id = valId, cex = .7, pconnect = 0.1, branch = 1)
+                  plot.pedigree(x = ped, col = z, id = valId, cex = input$scaleText, pconnect = 0.1, branch = 1, symbolsize = input$scaleNodes)
                 }
         )
       }
@@ -325,14 +352,14 @@ server <- function(input, output, session){
             ColStrain <- c(input$SelectedColors)[as.factor(get(input$SelectedColumn))]
             switch (input$ShowByID,
                     values = {
-                      plot.pedigree(x = ped, col = ColStrain, id = val, cex = .7)
+                      plot.pedigree(x = ped, col = ColStrain, id = val, cex = input$scaleText, symbolsize = input$scaleNodes)
                     },
                     ID = {
-                      plot.pedigree(x = ped, col = ColStrain, id = ID, cex = .7)
+                      plot.pedigree(x = ped, col = ColStrain, id = ID, cex = input$scaleText, symbolsize = input$scaleNodes)
                     }, 
                     both = {
                       valId = paste(ID, get(input$SelectedColumn), sep = "\n")
-                      plot.pedigree(x = ped, col = ColStrain, id = paste(ID, val), cex = .7)
+                      plot.pedigree(x = ped, col = ColStrain, id = paste(ID, val), cex = input$scaleText, symbolsize = input$scaleNodes)
                     }
             )
           }
@@ -345,14 +372,14 @@ server <- function(input, output, session){
             #align.pedigree(ped, packed=TRUE, width=10, align=TRUE, hints=ped$hints)
             switch (input$ShowByID,
                     values = {
-                      plot.pedigree(x = ped, col = z, id = val, cex = .7, pconnect = 0.1, branch = 1)
+                      plot.pedigree(x = ped, col = z, id = val, cex = input$scaleText, pconnect = 0.1, branch = 1, symbolsize = input$scaleNodes)
                     },
                     ID = {
-                      plot.pedigree(x = ped, col = z, id = ID, cex = .7, pconnect = 0.1, branch = 1)
+                      plot.pedigree(x = ped, col = z, id = ID, cex = input$scaleText, pconnect = 0.1, branch = 1, symbolsize = input$scaleNodes)
                     },
                     both = {
                       valId = paste(ID, get(input$SelectedColumn), sep = "\n")
-                      plot.pedigree(x = ped, col = z, id = valId, cex = .7, pconnect = 0.1, branch = 1)
+                      plot.pedigree(x = ped, col = z, id = valId, cex = input$scaleText, pconnect = 0.1, branch = 1, symbolsize = input$scaleNodes)
                     }
             )
           }
@@ -372,14 +399,14 @@ server <- function(input, output, session){
             ColStrain <- c(input$SelectedColors)[as.factor(get(input$SelectedColumn))]
             switch (input$ShowByID,
                     values = {
-                      plot.pedigree(x = ped, col = ColStrain, id = val, cex = .7)
+                      plot.pedigree(x = ped, col = ColStrain, id = val, cex = input$scaleText, symbolsize = input$scaleNodes)
                     },
                     ID = {
-                      plot.pedigree(x = ped, col = ColStrain, id = ID, cex = .7)
+                      plot.pedigree(x = ped, col = ColStrain, id = ID, cex = input$scaleText, symbolsize = input$scaleNodes)
                     }, 
                     both = {
                       valId = paste(ID, get(input$SelectedColumn), sep = "\n")
-                      plot.pedigree(x = ped, col = ColStrain, id = paste(ID, val), cex = .7)
+                      plot.pedigree(x = ped, col = ColStrain, id = paste(ID, val), cex = input$scaleText, symbolsize = input$scaleNodes)
                     }
             )
           }
@@ -392,14 +419,14 @@ server <- function(input, output, session){
             #align.pedigree(ped, packed=TRUE, width=10, align=TRUE, hints=ped$hints)
             switch (input$ShowByID,
                     values = {
-                      plot.pedigree(x = ped, col = z, id = val, cex = .7, pconnect = 0.1, branch = 1)
+                      plot.pedigree(x = ped, col = z, id = val, cex = input$scaleText, pconnect = 0.1, branch = 1, symbolsize = input$scaleNodes)
                     },
                     ID = {
-                      plot.pedigree(x = ped, col = z, id = ID, cex = .7, pconnect = 0.1, branch = 1)
+                      plot.pedigree(x = ped, col = z, id = ID, cex = input$scaleText, pconnect = 0.1, branch = 1, symbolsize = input$scaleNodes)
                     },
                     both = {
                       valId = paste(ID, get(input$SelectedColumn), sep = "\n")
-                      plot.pedigree(x = ped, col = z, id = valId, cex = .7, pconnect = 0.1, branch = 1)
+                      plot.pedigree(x = ped, col = z, id = valId, cex = input$scaleText, pconnect = 0.1, branch = 1, symbolsize = input$scaleNodes)
                     }
             )
           }
@@ -421,14 +448,14 @@ server <- function(input, output, session){
             ColStrain <- c(input$SelectedColors)[as.factor(get(input$SelectedColumn))]
             switch (input$ShowByID,
                     values = {
-                      plot.pedigree(x = ped, col = ColStrain, id = val, cex = .7)
+                      plot.pedigree(x = ped, col = ColStrain, id = val, cex = input$scaleText, symbolsize = input$scaleNodes)
                     },
                     ID = {
-                      plot.pedigree(x = ped, col = ColStrain, id = ID, cex = .7)
+                      plot.pedigree(x = ped, col = ColStrain, id = ID, cex = input$scaleText, symbolsize = input$scaleNodes)
                     }, 
                     both = {
                       valId = paste(ID, get(input$SelectedColumn), sep = "\n")
-                      plot.pedigree(x = ped, col = ColStrain, id = paste(ID, val), cex = .7)
+                      plot.pedigree(x = ped, col = ColStrain, id = paste(ID, val), cex = input$scaleText, symbolsize = input$scaleNodes)
                     }
             )
           }
@@ -441,14 +468,14 @@ server <- function(input, output, session){
             #align.pedigree(ped, packed=TRUE, width=10, align=TRUE, hints=ped$hints)
             switch (input$ShowByID,
                     values = {
-                      plot.pedigree(x = ped, col = z, id = val, cex = .7, pconnect = 0.1, branch = 1, mar = c(2,9,2,9))
+                      plot.pedigree(x = ped, col = z, id = val, cex = input$scaleText, pconnect = 0.1, branch = 1, mar = c(2,9,2,9), symbolsize = input$scaleNodes)
                     },
                     ID = {
-                      plot.pedigree(x = ped, col = z, id = ID, cex = .7, pconnect = 0.1, branch = 1, mar = c(2,9,2,9))
+                      plot.pedigree(x = ped, col = z, id = ID, cex = input$scaleText, pconnect = 0.1, branch = 1, mar = c(2,9,2,9), symbolsize = input$scaleNodes)
                     },
                     both = {
                       valId = paste(ID, get(input$SelectedColumn), sep = "\n")
-                      plot.pedigree(x = ped, col = z, id = valId, cex = .7, pconnect = 0.1, branch = 1, mar = c(2,9,2,9))
+                      plot.pedigree(x = ped, col = z, id = valId, cex = input$scaleText, pconnect = 0.1, branch = 1, mar = c(2,9,2,9), symbolsize = input$scaleNodes)
                     }
             )
           }
